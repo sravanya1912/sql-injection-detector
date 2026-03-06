@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Static SQL Injection Detection Compiler</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 750px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+      padding: 32px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.4rem;
+      color: #1a1a2e;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #666;
+      font-size: 0.88rem;
+      margin-bottom: 28px;
+    }
+
+    .upload-area {
+      border: 2px dashed #b0b8c9;
+      border-radius: 8px;
+      padding: 28px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: #f8f9fb;
+      margin-bottom: 16px;
+    }
+
+    .upload-area:hover, .upload-area.drag-over {
+      border-color: #4f46e5;
+      background: #eef2ff;
+    }
+
+    .upload-area input[type="file"] {
+      display: none;
+    }
+
+    .upload-icon { font-size: 2rem; margin-bottom: 8px; }
+
+    .upload-label {
+      color: #4f46e5;
+      font-weight: bold;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    #fileName {
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: #555;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      background: #4f46e5;
+      color: white;
+      border: none;
+      border-radius: 7px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-bottom: 24px;
+    }
+
+    .btn:hover { background: #3730a3; }
+    .btn:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    #status {
+      text-align: center;
+      font-size: 0.9rem;
+      color: #666;
+      min-height: 20px;
+      margin-bottom: 12px;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid #ccc;
+      border-top-color: #4f46e5;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #output {
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 20px;
+      border-radius: 8px;
+      font-family: "Courier New", monospace;
+      font-size: 0.82rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 80px;
+      line-height: 1.6;
+      display: none;
+    }
+
+    #output.has-vuln  { border-left: 4px solid #f85149; }
+    #output.is-safe   { border-left: 4px solid #3fb950; }
+    #output.is-error  { border-left: 4px solid #d29922; color: #f0a050; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🛡️ Static SQL Injection Detection Compiler</h1>
+  <p class="subtitle">Upload a Java source file to detect SQL injection vulnerabilities at compile time</p>
+
+  <!-- Upload area — clicking it opens file picker -->
+  <div class="upload-area" id="uploadArea">
+    <div class="upload-icon">📂</div>
+    <div>Drag &amp; drop a <strong>.java</strong> file here, or <span class="upload-label" id="browseLabel">browse</span></div>
+    <input type="file" id="fileInput" accept=".java" />
+    <div id="fileName">No file selected</div>
+  </div>
+
+  <!-- Analyze button is completely separate from the upload area -->
+  <button class="btn" id="analyzeBtn" disabled>Analyze File</button>
+
+  <div id="status"></div>
+  <pre id="output">Upload a .java file and click Analyze.</pre>
+</div>
+
+<script>
+  const uploadArea = document.getElementById("uploadArea");
+  const browseLabel = document.getElementById("browseLabel");
+  const fileInput  = document.getElementById("fileInput");
+  const analyzeBtn = document.getElementById("analyzeBtn");
+  const output     = document.getElementById("output");
+  const status     = document.getElementById("status");
+  const fileNameEl = document.getElementById("fileName");
+
+  // Only the upload area and browse label open the file picker — NOT the analyze button
+  uploadArea.addEventListener("click", (e) => {
+    // Don't trigger if the analyze button somehow bubbles (safety)
+    fileInput.click();
+  });
+
+  // Drag-and-drop support
+  uploadArea.addEventListener("dragover", e => {
+    e.preventDefault();
+    uploadArea.classList.add("drag-over");
+  });
+  uploadArea.addEventListener("dragleave", () => uploadArea.classList.remove("drag-over"));
+  uploadArea.addEventListener("drop", e => {
+    e.preventDefault();
+    uploadArea.classList.remove("drag-over");
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const dt = new DataTransfer();
+      dt.items.add(files[0]);
+      fileInput.files = dt.files;
+      onFileSelected();
+    }
+  });
+
+  fileInput.addEventListener("change", onFileSelected);
+
+  function onFileSelected() {
+    if (fileInput.files && fileInput.files.length > 0) {
+      const name = fileInput.files[0].name;
+      fileNameEl.textContent = "Selected: " + name;
+      analyzeBtn.disabled = false;
+    }
+  }
+
+  // Analyze button — completely detached from upload area
+  analyzeBtn.addEventListener("click", analyze);
+
+  async function analyze() {
+    const file = fileInput.files[0];
+    if (!file) {
+      alert("Please select a Java file first!");
+      return;
+    }
+
+    analyzeBtn.disabled = true;
+    status.innerHTML = '<span class="spinner"></span>Analyzing ' + file.name + ' ...';
+    output.style.display = "none";
+    output.className = "";
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch("http://localhost:5000/analyze", {
+        method: "POST",
+        body: formData
+      });
+
+      const text = await response.text();
+
+      output.style.display = "block";
+      output.textContent = text;
+
+      if (!response.ok) {
+        output.classList.add("is-error");
+        status.textContent = "⚠️ Server error during analysis.";
+      } else if (text.includes("VULNERABILITIES DETECTED") || text.includes("[WARNING]")) {
+        output.classList.add("has-vuln");
+        const count = (text.match(/Vulnerability #/g) || []).length;
+        status.textContent = "❌ Found " + count + " vulnerability" + (count !== 1 ? "ies" : "y") + " in " + file.name;
+      } else {
+        output.classList.add("is-safe");
+        status.textContent = "✅ No vulnerabilities detected in " + file.name;
+      }
+
+    } catch (err) {
+      output.style.display = "block";
+      output.classList.add("is-error");
+      output.textContent = "❌ Cannot connect to backend.\n\nMake sure the server is running:\n  cd server\n  node index.js";
+      status.textContent = "Connection failed.";
+    } finally {
+      analyzeBtn.disabled = false;
+    }
+  }
+</script>
+
+</body>
+</html>
