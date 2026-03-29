@@ -1,251 +1,1517 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
-  <title>Static SQL Injection Detection Compiler</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SQL Injection Detector v2.0</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;800&display=swap"
+    rel="stylesheet" />
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #09090f;
+      --surface: #0f0f1a;
+      --surface2: #141425;
+      --border: #1e1e35;
+      --border2: #2a2a45;
+      --accent: #6c63ff;
+      --accent2: #a78bfa;
+      --accent-glow: rgba(108, 99, 255, 0.25);
+      --red: #f85149;
+      --green: #3fb950;
+      --yellow: #e3b341;
+      --cyan: #79c0ff;
+      --orange: #ffa657;
+      --text: #e2e8f0;
+      --text-muted: #64748b;
+      --text-dim: #475569;
+      --font-mono: 'JetBrains Mono', monospace;
+      --font-ui: 'Syne', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
     body {
-      font-family: Arial, sans-serif;
-      background: #f0f2f5;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-ui);
       min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Grid background ───────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(108, 99, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(108, 99, 255, 0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .layout {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── LEFT PANEL ────────────────────────────────────── */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 32px 24px;
       display: flex;
-      align-items: flex-start;
-      justify-content: center;
-      padding: 40px 16px;
+      flex-direction: column;
+      gap: 28px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
     }
 
-    .container {
-      width: 100%;
-      max-width: 750px;
-      background: #fff;
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 42px;
+      height: 42px;
+      background: var(--accent);
       border-radius: 10px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
-      padding: 32px;
+      display: grid;
+      place-items: center;
+      font-size: 20px;
+      box-shadow: 0 0 20px var(--accent-glow);
+      flex-shrink: 0;
     }
 
-    h1 {
-      text-align: center;
-      font-size: 1.4rem;
-      color: #1a1a2e;
-      margin-bottom: 6px;
+    .logo-text h1 {
+      font-size: 0.95rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      line-height: 1.2;
+      color: var(--text);
     }
 
-    .subtitle {
-      text-align: center;
-      color: #666;
-      font-size: 0.88rem;
-      margin-bottom: 28px;
+    .logo-text span {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--accent2);
+      font-weight: 400;
     }
 
-    .upload-area {
-      border: 2px dashed #b0b8c9;
-      border-radius: 8px;
-      padding: 28px;
+    .divider {
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 1.5px dashed var(--border2);
+      border-radius: 12px;
+      padding: 28px 20px;
       text-align: center;
       cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
-      background: #f8f9fb;
-      margin-bottom: 16px;
+      transition: all 0.2s;
+      background: var(--surface2);
+      position: relative;
     }
 
-    .upload-area:hover, .upload-area.drag-over {
-      border-color: #4f46e5;
-      background: #eef2ff;
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(108, 99, 255, 0.07);
+      box-shadow: inset 0 0 30px rgba(108, 99, 255, 0.05);
     }
 
-    .upload-area input[type="file"] {
+    .drop-zone input {
       display: none;
     }
 
-    .upload-icon { font-size: 2rem; margin-bottom: 8px; }
+    .drop-icon {
+      font-size: 2rem;
+      margin-bottom: 10px;
+      display: block;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
 
-    .upload-label {
-      color: #4f46e5;
-      font-weight: bold;
+    .drop-zone:hover .drop-icon {
+      opacity: 1;
+    }
+
+    .drop-main {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .drop-main strong {
+      color: var(--accent2);
       cursor: pointer;
       text-decoration: underline;
+      text-underline-offset: 2px;
     }
 
     #fileName {
-      margin-top: 8px;
-      font-size: 0.85rem;
-      color: #555;
+      margin-top: 10px;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--accent);
+      min-height: 16px;
+      word-break: break-all;
     }
 
-    .btn {
-      display: block;
+    /* Run button */
+    .run-btn {
       width: 100%;
-      padding: 12px;
-      background: #4f46e5;
-      color: white;
+      padding: 14px;
+      background: var(--accent);
+      color: #fff;
       border: none;
-      border-radius: 7px;
-      font-size: 1rem;
-      font-weight: bold;
+      border-radius: 10px;
+      font-family: var(--font-ui);
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
       cursor: pointer;
-      transition: background 0.2s;
-      margin-bottom: 24px;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      box-shadow: 0 0 0 rgba(108, 99, 255, 0);
     }
 
-    .btn:hover { background: #3730a3; }
-    .btn:disabled { background: #a5b4fc; cursor: not-allowed; }
+    .run-btn:hover:not(:disabled) {
+      background: #7c73ff;
+      box-shadow: 0 0 24px var(--accent-glow);
+      transform: translateY(-1px);
+    }
 
-    #status {
-      text-align: center;
-      font-size: 0.9rem;
-      color: #666;
-      min-height: 20px;
-      margin-bottom: 12px;
+    .run-btn:disabled {
+      background: var(--border2);
+      color: var(--text-dim);
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* Stats tiles */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stat-tile {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      transition: border-color 0.2s;
+    }
+
+    .stat-tile.active {
+      border-color: var(--border2);
+    }
+
+    .stat-label {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-family: var(--font-mono);
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      transition: color 0.3s;
+    }
+
+    .stat-tile.high .stat-value {
+      color: var(--red);
+    }
+
+    .stat-tile.medium .stat-value {
+      color: var(--yellow);
+    }
+
+    .stat-tile.low .stat-value {
+      color: var(--cyan);
+    }
+
+    .stat-tile.safe .stat-value {
+      color: var(--green);
+    }
+
+    /* Legend */
+    .legend-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      margin-bottom: 10px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.71rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    /* ── RIGHT PANEL ───────────────────────────────────── */
+    .main {
+      padding: 32px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .main-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .main-header h2 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.02em;
+    }
+
+    #statusBadge {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      padding: 4px 12px;
+      border-radius: 20px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.3s;
+    }
+
+    #statusBadge.running {
+      border-color: var(--accent);
+      color: var(--accent2);
+    }
+
+    #statusBadge.vuln {
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    #statusBadge.safe {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    #statusBadge.error {
+      border-color: var(--yellow);
+      color: var(--yellow);
     }
 
     .spinner {
-      display: inline-block;
-      width: 16px; height: 16px;
-      border: 2px solid #ccc;
-      border-top-color: #4f46e5;
+      width: 10px;
+      height: 10px;
+      border: 1.5px solid currentColor;
+      border-top-color: transparent;
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
-      vertical-align: middle;
-      margin-right: 6px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    #output {
-      background: #0d1117;
-      color: #c9d1d9;
-      padding: 20px;
-      border-radius: 8px;
-      font-family: "Courier New", monospace;
-      font-size: 0.82rem;
-      white-space: pre-wrap;
-      word-break: break-word;
-      min-height: 80px;
-      line-height: 1.6;
       display: none;
     }
 
-    #output.has-vuln  { border-left: 4px solid #f85149; }
-    #output.is-safe   { border-left: 4px solid #3fb950; }
-    #output.is-error  { border-left: 4px solid #d29922; color: #f0a050; }
-  </style>
-</head>
-<body>
-
-<div class="container">
-  <h1>🛡️ Static SQL Injection Detection Compiler</h1>
-  <p class="subtitle">Upload a Java source file to detect SQL injection vulnerabilities at compile time</p>
-
-  <!-- Upload area — clicking it opens file picker -->
-  <div class="upload-area" id="uploadArea">
-    <div class="upload-icon">📂</div>
-    <div>Drag &amp; drop a <strong>.java</strong> file here, or <span class="upload-label" id="browseLabel">browse</span></div>
-    <input type="file" id="fileInput" accept=".java" />
-    <div id="fileName">No file selected</div>
-  </div>
-
-  <!-- Analyze button is completely separate from the upload area -->
-  <button class="btn" id="analyzeBtn" disabled>Analyze File</button>
-
-  <div id="status"></div>
-  <pre id="output">Upload a .java file and click Analyze.</pre>
-</div>
-
-<script>
-  const uploadArea = document.getElementById("uploadArea");
-  const browseLabel = document.getElementById("browseLabel");
-  const fileInput  = document.getElementById("fileInput");
-  const analyzeBtn = document.getElementById("analyzeBtn");
-  const output     = document.getElementById("output");
-  const status     = document.getElementById("status");
-  const fileNameEl = document.getElementById("fileName");
-
-  // Only the upload area and browse label open the file picker — NOT the analyze button
-  uploadArea.addEventListener("click", (e) => {
-    // Don't trigger if the analyze button somehow bubbles (safety)
-    fileInput.click();
-  });
-
-  // Drag-and-drop support
-  uploadArea.addEventListener("dragover", e => {
-    e.preventDefault();
-    uploadArea.classList.add("drag-over");
-  });
-  uploadArea.addEventListener("dragleave", () => uploadArea.classList.remove("drag-over"));
-  uploadArea.addEventListener("drop", e => {
-    e.preventDefault();
-    uploadArea.classList.remove("drag-over");
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      const dt = new DataTransfer();
-      dt.items.add(files[0]);
-      fileInput.files = dt.files;
-      onFileSelected();
-    }
-  });
-
-  fileInput.addEventListener("change", onFileSelected);
-
-  function onFileSelected() {
-    if (fileInput.files && fileInput.files.length > 0) {
-      const name = fileInput.files[0].name;
-      fileNameEl.textContent = "Selected: " + name;
-      analyzeBtn.disabled = false;
-    }
-  }
-
-  // Analyze button — completely detached from upload area
-  analyzeBtn.addEventListener("click", analyze);
-
-  async function analyze() {
-    const file = fileInput.files[0];
-    if (!file) {
-      alert("Please select a Java file first!");
-      return;
+    .spinner.active {
+      display: inline-block;
     }
 
-    analyzeBtn.disabled = true;
-    status.innerHTML = '<span class="spinner"></span>Analyzing ' + file.name + ' ...';
-    output.style.display = "none";
-    output.className = "";
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
 
-    const formData = new FormData();
-    formData.append("file", file);
+    /* Terminal output */
+    .terminal {
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 500px;
+    }
 
-    try {
-      const response = await fetch("http://localhost:5000/analyze", {
-        method: "POST",
-        body: formData
-      });
+    .terminal-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
 
-      const text = await response.text();
+    .terminal-dots {
+      display: flex;
+      gap: 6px;
+    }
 
-      output.style.display = "block";
-      output.textContent = text;
+    .terminal-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
 
-      if (!response.ok) {
-        output.classList.add("is-error");
-        status.textContent = "⚠️ Server error during analysis.";
-      } else if (text.includes("VULNERABILITIES DETECTED") || text.includes("[WARNING]")) {
-        output.classList.add("has-vuln");
-        const count = (text.match(/Vulnerability #/g) || []).length;
-        status.textContent = "❌ Found " + count + " vulnerability" + (count !== 1 ? "ies" : "y") + " in " + file.name;
-      } else {
-        output.classList.add("is-safe");
-        status.textContent = "✅ No vulnerabilities detected in " + file.name;
+    .terminal-dot:nth-child(1) {
+      background: #f85149;
+    }
+
+    .terminal-dot:nth-child(2) {
+      background: #e3b341;
+    }
+
+    .terminal-dot:nth-child(3) {
+      background: #3fb950;
+    }
+
+    .terminal-title {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-left: 4px;
+    }
+
+    .terminal-body {
+      padding: 20px 24px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      line-height: 1.75;
+      color: #8b949e;
+      overflow-y: auto;
+      flex: 1;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Colored terminal sections */
+    .t-header {
+      color: #6c63ff;
+      font-weight: 700;
+    }
+
+    .t-vuln {
+      color: #f85149;
+      font-weight: 600;
+    }
+
+    .t-safe {
+      color: #3fb950;
+      font-weight: 600;
+    }
+
+    .t-source {
+      color: #ffa657;
+    }
+
+    .t-sink {
+      color: #f85149;
+    }
+
+    .t-prop {
+      color: #79c0ff;
+    }
+
+    .t-san {
+      color: #3fb950;
+    }
+
+    .t-label {
+      color: #a78bfa;
+    }
+
+    .t-value {
+      color: #e2e8f0;
+    }
+
+    .t-dim {
+      color: #484f58;
+    }
+
+    .t-warn {
+      color: #e3b341;
+    }
+
+    .t-high {
+      color: #f85149;
+      background: rgba(248, 81, 73, 0.1);
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+
+    .t-medium {
+      color: #e3b341;
+      background: rgba(227, 179, 65, 0.1);
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+
+    .t-low {
+      color: #79c0ff;
+      background: rgba(121, 192, 255, 0.1);
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+
+    /* Vuln cards */
+    .vuln-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .vuln-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .vuln-card:hover {
+      border-color: var(--border2);
+    }
+
+    .vuln-card.severity-HIGH {
+      border-left: 3px solid var(--red);
+    }
+
+    .vuln-card.severity-MEDIUM {
+      border-left: 3px solid var(--yellow);
+    }
+
+    .vuln-card.severity-LOW {
+      border-left: 3px solid var(--cyan);
+    }
+
+    .card-header {
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      background: var(--surface2);
+    }
+
+    .card-header:hover {
+      background: #17172a;
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sev-badge {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.1em;
+    }
+
+    .sev-badge.HIGH {
+      background: rgba(248, 81, 73, 0.15);
+      color: var(--red);
+      border: 1px solid rgba(248, 81, 73, 0.3);
+    }
+
+    .sev-badge.MEDIUM {
+      background: rgba(227, 179, 65, 0.15);
+      color: var(--yellow);
+      border: 1px solid rgba(227, 179, 65, 0.3);
+    }
+
+    .sev-badge.LOW {
+      background: rgba(121, 192, 255, 0.15);
+      color: var(--cyan);
+      border: 1px solid rgba(121, 192, 255, 0.3);
+    }
+
+    .card-meta {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .confidence-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+    }
+
+    .conf-track {
+      width: 60px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .conf-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: var(--accent);
+      transition: width 0.5s ease;
+    }
+
+    .card-chevron {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      transition: transform 0.2s;
+    }
+
+    .card-chevron.open {
+      transform: rotate(90deg);
+    }
+
+    .card-body {
+      padding: 16px 18px;
+      display: none;
+      border-top: 1px solid var(--border);
+    }
+
+    .card-body.open {
+      display: block;
+    }
+
+    /* Taint flow */
+    .flow-chain {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: 12px 0;
+    }
+
+    .flow-node {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      position: relative;
+    }
+
+    .flow-node:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 13px;
+      top: 26px;
+      width: 1px;
+      height: calc(100% - 4px);
+      background: var(--border2);
+    }
+
+    .flow-dot {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 0.6rem;
+      flex-shrink: 0;
+      margin-top: 2px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .flow-dot.source {
+      background: rgba(255, 166, 87, 0.15);
+      border: 1px solid var(--orange);
+      color: var(--orange);
+    }
+
+    .flow-dot.prop {
+      background: rgba(121, 192, 255, 0.1);
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+    }
+
+    .flow-dot.san {
+      background: rgba(63, 185, 80, 0.1);
+      border: 1px solid var(--green);
+      color: var(--green);
+    }
+
+    .flow-dot.sink {
+      background: rgba(248, 81, 73, 0.1);
+      border: 1px solid var(--red);
+      color: var(--red);
+    }
+
+    .flow-content {
+      padding: 4px 0 16px;
+    }
+
+    .flow-type {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .flow-type.source {
+      color: var(--orange);
+    }
+
+    .flow-type.prop {
+      color: var(--cyan);
+    }
+
+    .flow-type.san {
+      color: var(--green);
+    }
+
+    .flow-type.sink {
+      color: var(--red);
+    }
+
+    .flow-desc {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .flow-line {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* Detail row */
+    .detail-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      align-items: flex-start;
+    }
+
+    .detail-key {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      min-width: 110px;
+      padding-top: 1px;
+    }
+
+    .detail-val {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: var(--text);
+      flex: 1;
+      line-height: 1.5;
+    }
+
+    .flag-chip {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.63rem;
+      padding: 2px 7px;
+      border-radius: 4px;
+      margin: 2px;
+      background: rgba(108, 99, 255, 0.1);
+      border: 1px solid rgba(108, 99, 255, 0.2);
+      color: var(--accent2);
+    }
+
+    /* Code recommendation */
+    .code-block {
+      background: #020609;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-family: var(--font-mono);
+      font-size: 0.73rem;
+      color: #8b949e;
+      line-height: 1.7;
+      margin-top: 12px;
+      overflow-x: auto;
+    }
+
+    .code-comment {
+      color: #484f58;
+    }
+
+    .code-kw {
+      color: #ff7b72;
+    }
+
+    .code-type {
+      color: #ffa657;
+    }
+
+    .code-string {
+      color: #a5d6ff;
+    }
+
+    .code-var {
+      color: #79c0ff;
+    }
+
+    .code-method {
+      color: #d2a8ff;
+    }
+
+    .code-num {
+      color: #a8c0ff;
+    }
+
+    .section-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      margin: 16px 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Raw toggle */
+    .raw-toggle {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 3px 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .raw-toggle:hover {
+      border-color: var(--accent);
+      color: var(--accent2);
+    }
+
+    #rawOutput {
+      display: none;
+    }
+
+    /* Welcome state */
+    .welcome {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      opacity: 0.4;
+      padding: 60px;
+      text-align: center;
+    }
+
+    .welcome-icon {
+      font-size: 3rem;
+    }
+
+    .welcome h3 {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .welcome p {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* Loading animation */
+    .loading-area {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    .loading-area.active {
+      display: flex;
+    }
+
+    .loading-ring {
+      width: 48px;
+      height: 48px;
+      border: 2px solid var(--border2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .loading-text {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      text-align: center;
+    }
+
+    .loading-step {
+      color: var(--accent2);
+      margin-top: 4px;
+      font-size: 0.7rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
       }
 
-    } catch (err) {
-      output.style.display = "block";
-      output.classList.add("is-error");
-      output.textContent = "❌ Cannot connect to backend.\n\nMake sure the server is running:\n  cd server\n  node index.js";
-      status.textContent = "Connection failed.";
-    } finally {
-      analyzeBtn.disabled = false;
+      .sidebar {
+        position: static;
+        height: auto;
+      }
     }
-  }
-</script>
 
+    /* 🔥 Sidebar hidden initially */
+    .layout.collapsed {
+      grid-template-columns: 0px 1fr;
+    }
+
+    .layout.collapsed .sidebar {
+      overflow: hidden;
+      padding: 0;
+      border: none;
+    }
+
+    /* 🔥 Resize cursor */
+    .sidebar {
+      resize: horizontal;
+      overflow: auto;
+      min-width: 180px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="layout">
+
+    <!-- ── SIDEBAR ───────────────────────────────────────── -->
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">🛡</div>
+        <div class="logo-text">
+          <h1>SQL Injection<br>Detector</h1>
+          <span>v2.0 · Taint Analysis Engine</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Drop zone -->
+      <div class="drop-zone" id="dropZone">
+        <span class="drop-icon">📂</span>
+        <div class="drop-main">
+          Drop a <strong id="browseLabel"><strong>.java</strong></strong> file here,<br>or <strong
+            id="browseLink">browse</strong>
+        </div>
+        <input type="file" id="fileInput" accept=".java" />
+        <div id="fileName"></div>
+      </div>
+
+      <button class="run-btn" id="analyzeBtn" disabled>▶ &nbsp; Run Analysis</button>
+
+      <div class="divider"></div>
+
+      <!-- Stats -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-tile" id="statHigh">
+          <div class="stat-label">High</div>
+          <div class="stat-value" id="valHigh">—</div>
+        </div>
+        <div class="stat-tile" id="statMedium">
+          <div class="stat-label">Medium</div>
+          <div class="stat-value" id="valMedium">—</div>
+        </div>
+        <div class="stat-tile" id="statLow">
+          <div class="stat-label">Low</div>
+          <div class="stat-value" id="valLow">—</div>
+        </div>
+        <div class="stat-tile" id="statSafe">
+          <div class="stat-label">Safe</div>
+          <div class="stat-value" id="valSafe">—</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Legend -->
+      <div>
+        <div class="legend-title">Taint Node Types</div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:#ffa657"></div> SOURCE — user input origin
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:#79c0ff"></div> PROPAGATION — variable hop
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:#3fb950"></div> SANITIZED — safe transform
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:#f85149"></div> SINK — SQL execution point
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── MAIN ─────────────────────────────────────────── -->
+    <main class="main">
+      <div class="main-header">
+        <h2>Analysis Output</h2>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="raw-toggle" id="rawToggle" style="display:none">⌨ Raw</button>
+          <div id="statusBadge">
+            <span class="spinner" id="spinner"></span>
+            <span id="statusText">Waiting for file…</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Welcome state -->
+      <div class="welcome" id="welcomeArea">
+        <div class="welcome-icon">⚡</div>
+        <h3>Upload a Java file to begin</h3>
+        <p>The engine performs multi-phase static analysis:<br>
+          symbol table construction → taint propagation →<br>
+          sanitization detection → vulnerability reporting</p>
+      </div>
+
+      <!-- Loading -->
+      <div class="loading-area" id="loadingArea">
+        <div class="loading-ring"></div>
+        <div class="loading-text">
+          <div>Analyzing…</div>
+          <div class="loading-step" id="loadingStep">Building symbol table</div>
+        </div>
+      </div>
+
+      <!-- Results area -->
+      <div id="resultsArea" style="display:none">
+        <div class="vuln-cards" id="vulnCards"></div>
+      </div>
+
+      <!-- Raw terminal output -->
+      <div class="terminal" id="rawOutput">
+        <div class="terminal-bar">
+          <div class="terminal-dots">
+            <div class="terminal-dot"></div>
+            <div class="terminal-dot"></div>
+            <div class="terminal-dot"></div>
+          </div>
+          <span class="terminal-title" id="terminalTitle">stdout</span>
+        </div>
+        <div class="terminal-body" id="terminalBody"></div>
+      </div>
+
+      <!-- Error state -->
+      <div id="errorArea" style="display:none">
+        <div class="terminal">
+          <div class="terminal-bar">
+            <div class="terminal-dots">
+              <div class="terminal-dot"></div>
+              <div class="terminal-dot"></div>
+              <div class="terminal-dot"></div>
+            </div>
+            <span class="terminal-title">error</span>
+          </div>
+          <div class="terminal-body" id="errorBody" style="color:#f85149"></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    // ── DOM refs ────────────────────────────────────────────────
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const browseLink = document.getElementById('browseLink');
+    const fileNameEl = document.getElementById('fileName');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const statusBadge = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
+    const spinner = document.getElementById('spinner');
+    const welcomeArea = document.getElementById('welcomeArea');
+    const loadingArea = document.getElementById('loadingArea');
+    const loadingStep = document.getElementById('loadingStep');
+    const resultsArea = document.getElementById('resultsArea');
+    const vulnCards = document.getElementById('vulnCards');
+    const rawOutput = document.getElementById('rawOutput');
+    const rawToggle = document.getElementById('rawToggle');
+    const terminalBody = document.getElementById('terminalBody');
+    const terminalTitle = document.getElementById('terminalTitle');
+    const errorArea = document.getElementById('errorArea');
+    const errorBody = document.getElementById('errorBody');
+
+    // Stats
+    const valHigh = document.getElementById('valHigh');
+    const valMedium = document.getElementById('valMedium');
+    const valLow = document.getElementById('valLow');
+    const valSafe = document.getElementById('valSafe');
+    const statHigh = document.getElementById('statHigh');
+    const statMedium = document.getElementById('statMedium');
+    const statLow = document.getElementById('statLow');
+    const statSafe = document.getElementById('statSafe');
+
+    // ── File selection ──────────────────────────────────────────
+    dropZone.addEventListener('click', () => fileInput.click());
+    browseLink.addEventListener('click', e => { e.stopPropagation(); fileInput.click(); });
+    fileInput.addEventListener('change', onFileSelected);
+
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length > 0) {
+        const dt = new DataTransfer();
+        dt.items.add(e.dataTransfer.files[0]);
+        fileInput.files = dt.files;
+        onFileSelected();
+      }
+    });
+
+    function onFileSelected() {
+      if (fileInput.files?.length > 0) {
+        fileNameEl.textContent = '📄 ' + fileInput.files[0].name;
+        analyzeBtn.disabled = false;
+      }
+    }
+
+    // ── Raw toggle ──────────────────────────────────────────────
+    let showingRaw = false;
+    rawToggle.addEventListener('click', () => {
+      showingRaw = !showingRaw;
+      rawOutput.style.display = showingRaw ? 'flex' : 'none';
+      resultsArea.style.display = showingRaw ? 'none' : 'block';
+      rawToggle.textContent = showingRaw ? '⊞ Cards' : '⌨ Raw';
+    });
+
+    // ── Loading steps ───────────────────────────────────────────
+    const STEPS = [
+      'Building symbol table…',
+      'Propagating taint through variables…',
+      'Checking sanitization boundaries…',
+      'Scanning SQL sink methods…',
+      'Computing confidence scores…',
+      'Generating vulnerability report…'
+    ];
+
+    let stepInterval = null;
+
+    function startLoadingSteps() {
+      let i = 0;
+      loadingStep.textContent = STEPS[0];
+      stepInterval = setInterval(() => {
+        i = (i + 1) % STEPS.length;
+        loadingStep.textContent = STEPS[i];
+      }, 900);
+    }
+
+    function stopLoadingSteps() {
+      clearInterval(stepInterval);
+      stepInterval = null;
+    }
+
+    // ── Analyze ─────────────────────────────────────────────────
+    analyzeBtn.addEventListener('click', analyze);
+
+    async function analyze() {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+
+      analyzeBtn.disabled = true;
+      setStatus('running', '⟳', 'Analyzing ' + file.name);
+      spinner.classList.add('active');
+
+      welcomeArea.style.display = 'none';
+      loadingArea.style.display = 'none';
+      resultsArea.style.display = 'none';
+      rawOutput.style.display = 'none';
+      errorArea.style.display = 'none';
+      rawToggle.style.display = 'none';
+      showingRaw = false;
+
+      loadingArea.classList.add('active');
+      loadingArea.style.display = 'flex';
+      startLoadingSteps();
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const response = await fetch('http://localhost:5000/analyze', {
+          method: 'POST',
+          body: formData
+        });
+
+        const text = await response.text();
+        stopLoadingSteps();
+        loadingArea.style.display = 'none';
+        loadingArea.classList.remove('active');
+        spinner.classList.remove('active');
+
+        terminalBody.textContent = text;
+        terminalTitle.textContent = file.name + ' · stdout';
+
+        if (!response.ok) {
+          errorBody.textContent = text;
+          errorArea.style.display = 'block';
+          setStatus('error', '⚠', 'Server error');
+        } else {
+          parseAndRender(text, file.name);
+          rawToggle.style.display = '';
+        }
+
+      } catch (err) {
+        stopLoadingSteps();
+        loadingArea.style.display = 'none';
+        loadingArea.classList.remove('active');
+        spinner.classList.remove('active');
+        errorBody.textContent =
+          '❌ Cannot connect to backend.\n\n' +
+          'Make sure the server is running:\n' +
+          '  cd server\n  node index.js\n\n' +
+          'Error: ' + err.message;
+        errorArea.style.display = 'block';
+        setStatus('error', '⚠', 'Connection failed');
+      } finally {
+        analyzeBtn.disabled = false;
+      }
+    }
+
+    // ── Parse raw output & render cards ─────────────────────────
+    function parseAndRender(text, fileName) {
+      if (text.includes('VULNERABILITIES DETECTED') || text.includes('[WARNING]') ||
+        text.includes('Vulnerability #')) {
+
+        const vulns = extractVulnerabilities(text);
+        renderVulnCards(vulns);
+
+        const high = vulns.filter(v => v.severity === 'HIGH').length;
+        const medium = vulns.filter(v => v.severity === 'MEDIUM').length;
+        const low = vulns.filter(v => v.severity === 'LOW').length;
+
+        updateStats(high, medium, low, false);
+        const total = vulns.length;
+        setStatus('vuln', '❌', `${total} vulnerabilit${total !== 1 ? 'ies' : 'y'} in ${fileName}`);
+
+      } else if (text.includes('No SQL Injection') || text.includes('is-safe') ||
+        text.includes('✔')) {
+        renderSafeCard(fileName);
+        updateStats(0, 0, 0, true);
+        setStatus('safe', '✔', 'No vulnerabilities in ' + fileName);
+      } else {
+        // Show raw if we can't parse
+        rawOutput.style.display = 'flex';
+        rawToggle.textContent = '⊞ Cards';
+        showingRaw = true;
+        setStatus('safe', '✔', 'Analysis complete');
+      }
+      resultsArea.style.display = showingRaw ? 'none' : 'block';
+    }
+
+    function extractVulnerabilities(text) {
+      const vulns = [];
+      const blocks = text.split(/Vulnerability #\d+/).slice(1);
+
+      blocks.forEach(block => {
+        const get = (key) => {
+          const m = block.match(new RegExp('\\[?' + key + '\\]?\\s*[:\\|]?\\s*(.+)'));
+          return m ? m[1].trim() : null;
+        };
+
+        const sev = detectSeverity(block);
+        const conf = extractConfidence(block);
+
+        const chainNodes = extractTaintChain(block);
+        const flags = extractFlags(block);
+        const explanation = extractSection(block, 'EXPLANATION');
+        const variable = get('VARIABLE') || get('Variable') || '(expression)';
+        const sinkMethod = (get('SINK METHOD') || get('SINK') || 'execute').replace(/\(\)$/, '');
+        const line = get('SINK LINE') || get('LINE') || '?';
+        const source = extractSource(block);
+
+        vulns.push({ sev, conf, chainNodes, flags, explanation, variable, sinkMethod, line, source });
+      });
+
+      return vulns;
+    }
+
+    function detectSeverity(block) {
+      if (/HIGH/.test(block) && !/MEDIUM|LOW/.test(block.split('HIGH')[0])) return 'HIGH';
+      if (/MEDIUM/.test(block)) return 'MEDIUM';
+      if (/LOW/.test(block)) return 'LOW';
+      if (/HIGH/.test(block)) return 'HIGH';
+      return 'HIGH';
+    }
+
+    function extractConfidence(block) {
+      const m = block.match(/CONFIDENCE\s*[:\|]\s*(\d+)/);
+      return m ? parseInt(m[1]) : 70;
+    }
+
+    function extractTaintChain(block) {
+      const nodes = [];
+      const taintSection = block.match(/TAINT FLOW:([\s\S]*?)(?=EXPLANATION:|RECOMMENDATION:|═+|$)/);
+      if (!taintSection) return nodes;
+
+      const raw = taintSection[1];
+      const lines = raw.split('\n').filter(l => l.trim());
+
+      lines.forEach(line => {
+        const srcM = line.match(/\[SOURCE\]\s+(.*)/);
+        const propM = line.match(/\[PROPAGATION\]\s+(.*)/);
+        const sanM = line.match(/\[SANITIZED\]\s+(.*)/);
+        const snkM = line.match(/\[SINK\]\s+(.*)/);
+        const lineM = line.match(/\(line (\d+)\)/);
+        const lineNum = lineM ? lineM[1] : null;
+
+        if (srcM) nodes.push({ type: 'source', label: srcM[1].trim(), line: lineNum });
+        else if (propM) nodes.push({ type: 'prop', label: propM[1].trim(), line: lineNum });
+        else if (sanM) nodes.push({ type: 'san', label: sanM[1].trim(), line: lineNum });
+        else if (snkM) nodes.push({ type: 'sink', label: snkM[1].trim(), line: lineNum });
+        else {
+          // Try numbered steps: "  1. [SOURCE] ..."
+          const numM = line.match(/^\s*\d+\.\s*(.*)/);
+          if (numM) {
+            const inner = numM[1];
+            const typeM = inner.match(/\[(SOURCE|PROPAGATION|SANITIZED|SINK)\]\s+(.*)/);
+            if (typeM) {
+              const t = typeM[1].toLowerCase();
+              nodes.push({ type: t === 'propagation' ? 'prop' : t, label: typeM[2].trim(), line: lineNum });
+            }
+          }
+        }
+      });
+
+      return nodes;
+    }
+
+    function extractFlags(block) {
+      const flags = [];
+      if (/DIRECT.CONCAT/i.test(block)) flags.push('Direct string concatenation');
+      if (/DEEP.PROPAGATION/i.test(block)) flags.push('Deep propagation chain');
+      if (/INTER.PROCEDURAL/i.test(block)) flags.push('Inter-procedural taint');
+      if (/SANITIZER/i.test(block) && /PARTIAL|MAY/i.test(block)) flags.push('Partial sanitizer detected');
+      return flags;
+    }
+
+    function extractSection(block, label) {
+      const m = block.match(new RegExp(label + ':([\\s\\S]*?)(?=\\n[A-Z ]{3,}:|═+|$)'));
+      return m ? m[1].replace(/\n\s*│\s*/g, ' ').replace(/^\s*│\s*/gm, '').trim() : null;
+    }
+
+    function extractSource(block) {
+      const m = block.match(/SOURCE\s*[:\|]\s*(.*?)(?:\(line|$)/);
+      return m ? m[1].trim() : 'user input';
+    }
+
+    function renderVulnCards(vulns) {
+      vulnCards.innerHTML = '';
+      vulns.forEach((v, idx) => {
+        const card = document.createElement('div');
+        card.className = `vuln-card severity-${v.sev}`;
+
+        const confPct = Math.min(100, v.conf);
+        const confColor = confPct >= 70 ? '#f85149' : confPct >= 40 ? '#e3b341' : '#79c0ff';
+
+        card.innerHTML = `
+        <div class="card-header" onclick="toggleCard(this)">
+          <div class="card-title">
+            <span class="sev-badge ${v.sev}">${v.sev}</span>
+            <span class="card-meta">Vulnerability #${idx + 1} &nbsp;·&nbsp; ${v.sinkMethod}() &nbsp;·&nbsp; line ${v.line}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="confidence-bar">
+              <div class="conf-track">
+                <div class="conf-fill" style="width:${confPct}%;background:${confColor}"></div>
+              </div>
+              <span>${confPct}/100</span>
+            </div>
+            <span class="card-chevron">▶</span>
+          </div>
+        </div>
+        <div class="card-body">
+
+          <div class="section-label">Details</div>
+          <div class="detail-row">
+            <span class="detail-key">Variable</span>
+            <span class="detail-val" style="color:var(--cyan);font-weight:600">${escHtml(v.variable)}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-key">Sink Method</span>
+            <span class="detail-val">${escHtml(v.sinkMethod)}()</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-key">Source</span>
+            <span class="detail-val" style="color:var(--orange)">${escHtml(v.source)}</span>
+          </div>
+          ${v.flags.length ? `
+          <div class="detail-row">
+            <span class="detail-key">Flags</span>
+            <span class="detail-val">${v.flags.map(f => `<span class="flag-chip">${f}</span>`).join('')}</span>
+          </div>` : ''}
+
+          ${v.chainNodes.length ? `
+          <div class="section-label">Taint Flow</div>
+          <div class="flow-chain">
+            ${v.chainNodes.map(n => `
+            <div class="flow-node">
+              <div class="flow-dot ${n.type}">${nodeIcon(n.type)}</div>
+              <div class="flow-content">
+                <div class="flow-type ${n.type}">${nodeLabel(n.type)}</div>
+                <div class="flow-desc">${escHtml(n.label)}</div>
+                ${n.line ? `<div class="flow-line">line ${n.line}</div>` : ''}
+              </div>
+            </div>`).join('')}
+          </div>` : ''}
+
+          ${v.explanation ? `
+          <div class="section-label">Explanation</div>
+          <div style="font-family:var(--font-mono);font-size:0.74rem;color:var(--text-muted);line-height:1.6;padding:0 4px">
+            ${escHtml(v.explanation)}
+          </div>` : ''}
+
+          <div class="section-label">Recommended Fix</div>
+          <div class="code-block">
+<span class="code-comment">// ✗ Vulnerable — tainted input in query string</span>
+<span class="code-type">String</span> <span class="code-var">query</span> = <span class="code-string">"SELECT * FROM users WHERE id = '"</span> + <span class="code-var">${escHtml(shortVar(v.variable))}</span> + <span class="code-string">"'"</span>;
+<span class="code-var">stmt</span>.<span class="code-method">${escHtml(v.sinkMethod)}</span>(<span class="code-var">query</span>);  <span class="code-comment">// ← VULNERABLE</span>
+
+<span class="code-comment">// ✔ Safe — use PreparedStatement</span>
+<span class="code-type">PreparedStatement</span> <span class="code-var">ps</span> = <span class="code-var">conn</span>.<span class="code-method">prepareStatement</span>(
+    <span class="code-string">"SELECT * FROM users WHERE id = ?"</span>);
+<span class="code-var">ps</span>.<span class="code-method">setString</span>(<span class="code-num">1</span>, <span class="code-var">${escHtml(shortVar(v.variable))}</span>);
+<span class="code-type">ResultSet</span> <span class="code-var">rs</span> = <span class="code-var">ps</span>.<span class="code-method">executeQuery</span>();</div>
+
+        </div>`;
+
+        vulnCards.appendChild(card);
+      });
+    }
+
+    function renderSafeCard(fileName) {
+      vulnCards.innerHTML = `
+      <div style="text-align:center;padding:60px 20px;opacity:0.7">
+        <div style="font-size:3rem;margin-bottom:16px">✅</div>
+        <div style="font-family:var(--font-ui);font-size:1.1rem;font-weight:700;color:var(--green);margin-bottom:8px">
+          No SQL Injection Vulnerabilities Detected
+        </div>
+        <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-dim)">
+          All tainted data paths are either sanitized or absent in <strong>${escHtml(fileName)}</strong>
+        </div>
+      </div>`;
+      resultsArea.style.display = 'block';
+    }
+
+    function updateStats(high, medium, low, safe) {
+      valHigh.textContent = high;
+      valMedium.textContent = medium;
+      valLow.textContent = low;
+      valSafe.textContent = safe ? '✓' : '✗';
+
+      statHigh.className = 'stat-tile' + (high > 0 ? ' active high' : '');
+      statMedium.className = 'stat-tile' + (medium > 0 ? ' active medium' : '');
+      statLow.className = 'stat-tile' + (low > 0 ? ' active low' : '');
+      statSafe.className = 'stat-tile' + (safe ? ' active safe' : '');
+    }
+
+    function setStatus(cls, icon, text) {
+      statusBadge.className = 'statusBadge ' + cls;
+      statusBadge.id = 'statusBadge';
+      statusText.textContent = icon + '  ' + text;
+    }
+
+    function toggleCard(header) {
+      const body = header.nextElementSibling;
+      const chevron = header.querySelector('.card-chevron');
+      body.classList.toggle('open');
+      chevron.classList.toggle('open');
+    }
+
+    function nodeIcon(t) {
+      return { source: 'S', prop: '→', san: '✓', sink: '⚑' }[t] || '·';
+    }
+
+    function nodeLabel(t) {
+      return { source: 'Source', prop: 'Propagation', san: 'Sanitized', sink: 'Sink' }[t] || t;
+    }
+
+    function escHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function shortVar(v) {
+      return v && v.length > 18 ? 'userInput' : (v || 'userInput');
+    }
+
+    window.toggleCard = toggleCard;
+  </script>
 </body>
+
 </html>
